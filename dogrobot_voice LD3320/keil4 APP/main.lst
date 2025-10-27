@@ -1,0 +1,302 @@
+C51 COMPILER V9.00   MAIN                                                                  03/30/2024 23:02:27 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN ..\obj\main.obj
+COMPILER INVOKED BY: D:\My software\keil4\C51\BIN\C51.EXE ..\code\main.c INCDIR(..\code;..\user) DEBUG OBJECTEXTEND PRIN
+                    -T(.\main.lst) OBJECT(..\obj\main.obj)
+
+line level    source
+
+   1          /******************************************************
+   2          **  工程名称：UNV-01语音识别模块驱动程序
+   3          **      CPU: STC11L08XE
+   4          **      晶振：22.1184MHZ
+   5          **      波特率：9600 bit/S
+   6          **      配套产品信息：UNV-LD3320+STC11语音识别开发板
+   7          **  修改日期：2018.5.13
+   8          **  说明：口令模式： 即每次识别时都需要说“银狼”这个口令 ，才能够进行下一级的识别
+   9          ***************************/
+  10          #include "config.h"
+  11          /************************************************************************************/
+  12          //      nAsrStatus 用来在main主程序中表示程序运行的状态，不是LD3320芯片内部的状态寄存器
+  13          //      LD_ASR_NONE:            表示没有在作ASR识别
+  14          //      LD_ASR_RUNING：         表示LD3320正在作ASR识别中
+  15          //      LD_ASR_FOUNDOK:         表示一次识别流程结束后，有一个识别结果
+  16          //      LD_ASR_FOUNDZERO:       表示一次识别流程结束后，没有识别结果
+  17          //      LD_ASR_ERROR:           表示一次识别流程中LD3320芯片内部出现不正确的状态
+  18          /***********************************************************************************/
+  19          uint8 idata nAsrStatus=0;       
+  20          void MCU_init(); 
+  21          void ProcessInt0(); //识别处理函数
+  22          void delay(unsigned long uldata);
+  23          void User_handle(uint8 dat);//用户执行操作函数
+  24          void Delay200ms();
+  25          void Led_test(void);//单片机工作指示
+  26          uint8_t G0_flag=DISABLE;//运行标志，ENABLE:运行。DISABLE:禁止运行 
+  27          sbit LED=P4^2;//信号指示灯
+  28          /***********************************************************
+  29          * 名    称： void  main(void)
+  30          * 功    能： 主函数     程序入口
+  31          * 入口参数：  
+  32          * 出口参数：
+  33          * 说    明：                                     
+  34          * 调用方法： 
+  35          **********************************************************/ 
+  36          void  main(void)
+  37          {
+  38   1              uint8 idata nAsrRes;
+  39   1              uint8 i=0;
+  40   1              Led_test();
+  41   1              MCU_init();
+  42   1              LD_Reset();
+  43   1              UartIni(); /*串口初始化*/
+  44   1              nAsrStatus = LD_ASR_NONE;               //      初始状态：没有在作ASR
+  45   1              
+  46   1              #ifdef TEST     
+  47   1      //    PrintCom("一级口令：银狼\r\n"); /*text.....*/
+  48   1      //      PrintCom("二级口令：1、前进\r\n"); /*text.....*/
+  49   1      //      PrintCom("      2、后退\r\n"); /*text.....*/
+  50   1      //      PrintCom("      3、左向移动\r\n"); /*text.....*/
+  51   1      //      PrintCom("      4、右向移动\r\n"); /*text.....*/
+  52   1      //      PrintCom("  5、左转\r\n"); /*text.....*/
+  53   1      //      PrintCom("      6、右转\r\n"); /*text.....*/
+  54   1      //      PrintCom("      7、站立\r\n"); /*text.....*/
+C51 COMPILER V9.00   MAIN                                                                  03/30/2024 23:02:27 PAGE 2   
+
+  55   1      //      PrintCom("      8、蹲下\r\n"); /*text.....*/
+  56   1      //      PrintCom("      9、仰头\r\n"); /*text.....*/
+  57   1      //      PrintCom("  10、低头\r\n"); /*text.....*/
+  58   1      //      PrintCom("      11、握手\r\n"); /*text.....*/
+  59   1      //      PrintCom("      12、原地踏步\r\n"); /*text.....*/
+  60   1      //      PrintCom("      13、左右摇摆\r\n"); /*text.....*/
+  61   1      //      PrintCom("  14、前后摇摆\r\n"); /*text.....*/
+  62   1      //      PrintCom("      15、散步\r\n"); /*text.....*/
+  63   1      
+  64   1              #endif
+  65   1      
+  66   1              while(1)
+  67   1              {
+  68   2                      switch(nAsrStatus)
+  69   2                      {
+  70   3                              case LD_ASR_RUNING:
+  71   3                              case LD_ASR_ERROR:              
+  72   3                                      break;
+  73   3                              case LD_ASR_NONE:
+  74   3                              {
+  75   4                                      nAsrStatus=LD_ASR_RUNING;
+  76   4                                      if (RunASR()==0)        /*      启动一次ASR识别流程：ASR初始化，ASR添加关键词语，启动ASR运算*/
+  77   4                                      {
+  78   5                                              nAsrStatus = LD_ASR_ERROR;
+  79   5                                      }
+  80   4                                      break;
+  81   4                              }
+  82   3                              case LD_ASR_FOUNDOK: /* 一次ASR识别流程结束，去取ASR识别结果*/
+  83   3                              {                               
+  84   4                                      nAsrRes = LD_GetResult();               /*获取结果*/
+  85   4                                      User_handle(nAsrRes);//用户执行函数 
+  86   4                                      nAsrStatus = LD_ASR_NONE;
+  87   4                                      break;
+  88   4                              }
+  89   3                              case LD_ASR_FOUNDZERO:
+  90   3                              default:
+  91   3                              {
+  92   4                                      nAsrStatus = LD_ASR_NONE;
+  93   4                                      break;
+  94   4                              }
+  95   3                      }// switch                              
+  96   2              }// while
+  97   1      
+  98   1      }
+  99          /***********************************************************
+ 100          * 名    称：     LED灯测试
+ 101          * 功    能： 单片机是否工作指示
+ 102          * 入口参数： 无 
+ 103          * 出口参数：无
+ 104          * 说    明：                                     
+ 105          **********************************************************/
+ 106          void Led_test(void)
+ 107          {
+ 108   1              LED=~ LED;
+ 109   1              Delay200ms();
+ 110   1              LED=~ LED;
+ 111   1              Delay200ms();
+ 112   1              LED=~ LED;
+ 113   1              Delay200ms();
+ 114   1              LED=~ LED;
+ 115   1      }
+ 116          /***********************************************************
+C51 COMPILER V9.00   MAIN                                                                  03/30/2024 23:02:27 PAGE 3   
+
+ 117          * 名    称： void MCU_init()
+ 118          * 功    能： 单片机初始化
+ 119          * 入口参数：  
+ 120          * 出口参数：
+ 121          * 说    明：                                     
+ 122          * 调用方法： 
+ 123          **********************************************************/ 
+ 124          void MCU_init()
+ 125          {
+ 126   1              P0 = 0xff;
+ 127   1              P1 = 0xff;
+ 128   1              P2 = 0xff;
+ 129   1              P3 = 0xff;
+ 130   1              P4 = 0xff;
+ 131   1              
+ 132   1      
+ 133   1              LD_MODE = 0;            //      设置MD管脚为低，并行模式读写
+ 134   1              IE0=1;
+ 135   1              EX0=1;
+ 136   1              EA=1;
+ 137   1      }
+ 138          /***********************************************************
+ 139          * 名    称：    延时函数
+ 140          * 功    能：
+ 141          * 入口参数：  
+ 142          * 出口参数：
+ 143          * 说    明：                                     
+ 144          * 调用方法： 
+ 145          **********************************************************/ 
+ 146          void Delay200us()               //@22.1184MHz
+ 147          {
+ 148   1              unsigned char i, j;
+ 149   1              _nop_();
+ 150   1              _nop_();
+ 151   1              i = 5;
+ 152   1              j = 73;
+ 153   1              do
+ 154   1              {
+ 155   2                      while (--j);
+ 156   2              } while (--i);
+ 157   1      }
+ 158          
+ 159          void  delay(unsigned long uldata)
+ 160          {
+ 161   1              unsigned int j  =  0;
+ 162   1              unsigned int g  =  0;
+ 163   1              while(uldata--)
+ 164   1              Delay200us();
+ 165   1      }
+ 166          
+ 167          void Delay200ms()               //@22.1184MHz
+ 168          {
+ 169   1              unsigned char i, j, k;
+ 170   1      
+ 171   1              i = 17;
+ 172   1              j = 208;
+ 173   1              k = 27;
+ 174   1              do
+ 175   1              {
+ 176   2                      do
+ 177   2                      {
+ 178   3                              while (--k);
+C51 COMPILER V9.00   MAIN                                                                  03/30/2024 23:02:27 PAGE 4   
+
+ 179   3                      } while (--j);
+ 180   2              } while (--i);
+ 181   1      }
+ 182          
+ 183          /***********************************************************
+ 184          * 名    称： 中断处理函数
+ 185          * 功    能：
+ 186          * 入口参数：  
+ 187          * 出口参数：
+ 188          * 说    明：                                     
+ 189          * 调用方法： 
+ 190          **********************************************************/ 
+ 191          void ExtInt0Handler(void) interrupt 0  
+ 192          {       
+ 193   1              ProcessInt0();                          
+ 194   1      }
+ 195          /***********************************************************
+ 196          * 名    称：用户执行函数 
+ 197          * 功    能：识别成功后，执行动作可在此进行修改 
+ 198          * 入口参数： 无 
+ 199          * 出口参数：无
+ 200          * 说    明：                                     
+ 201          **********************************************************/
+ 202          void    User_handle(uint8 dat)
+ 203          {
+ 204   1           //UARTSendByte(dat);//串口识别码（十六进制）
+ 205   1                       if(0==dat)
+ 206   1                       {
+ 207   2                        G0_flag=ENABLE;
+ 208   2                              LED=0;
+ 209   2                              PrintCom("[0]"); /*text.....*/
+ 210   2                       }
+ 211   1                       else if(ENABLE==G0_flag)
+ 212   1                       {      
+ 213   2                                      G0_flag=DISABLE;
+ 214   2                                      LED=1;
+ 215   2                               switch(dat)               /*对结果执行相关操作,客户可删除Printcom 串口输出语句替换为其他需要控制的代码*/
+ 216   2                                {
+ 217   3                                              case CODE_forward:                      
+ 218   3                                                      PrintCom("[1]"); /*text.....*/
+ 219   3                                                      break;
+ 220   3                                              case CODE_back: 
+ 221   3                                                      PrintCom("[2]"); /*text.....*/
+ 222   3                                                      break;
+ 223   3                                              case CODE_left:                                 
+ 224   3                                                      PrintCom("[3]"); /*text.....*/
+ 225   3                                                      break;
+ 226   3                                              case CODE_right:                                        
+ 227   3                                                      PrintCom("[4]"); /*text.....*/
+ 228   3                                                      break;
+ 229   3                                              case CODE_left_turn:                                            
+ 230   3                                                      PrintCom("[5]"); /*text.....*/
+ 231   3                                                      break;
+ 232   3                                              case CODE_right_turn:                                           
+ 233   3                                                      PrintCom("[6]"); /*text.....*/
+ 234   3                                                      break;
+ 235   3                                              case CODE_stand:                                        
+ 236   3                                                      PrintCom("[7]"); /*text.....*/
+ 237   3                                                      break;  
+ 238   3                                              case CODE_sit:                  
+ 239   3                                                      PrintCom("[8]"); /*text.....*/
+ 240   3                                                      break;
+C51 COMPILER V9.00   MAIN                                                                  03/30/2024 23:02:27 PAGE 5   
+
+ 241   3                                              case CODE_rise: 
+ 242   3                                                      PrintCom("[9]"); /*text.....*/
+ 243   3                                                      break;
+ 244   3                                              case CODE_down:                                 
+ 245   3                                                      PrintCom("[a]"); /*text.....*/
+ 246   3                                                      break;
+ 247   3                                              case CODE_hand:                                 
+ 248   3                                                      PrintCom("[b]"); /*text.....*/
+ 249   3                                                      break;
+ 250   3                                              case CODE_stand_still:                                          
+ 251   3                                                      PrintCom("[c]"); /*text.....*/
+ 252   3                                                      break;
+ 253   3                                              case CODE_left_right_swing:                                             
+ 254   3                                                      PrintCom("[d]"); /*text.....*/
+ 255   3                                                      break;
+ 256   3                                              case CODE_forward_back_swing:                                   
+ 257   3                                                      PrintCom("[e]"); /*text.....*/
+ 258   3                                                      break;
+ 259   3                                              case CODE_walk:                                         
+ 260   3                                                      PrintCom("[f]"); /*text.....*/
+ 261   3                                                      break;                                                                                                                                                                                                                  
+ 262   3                                              default:
+ 263   3                                                      PrintCom("[r]"); /*text..."请重新识别发口令\r\n"..*/break;
+ 264   3                                      }       
+ 265   2                              }       
+ 266   1                              else    
+ 267   1                              {
+ 268   2                                      PrintCom("[p]"); /*text..."请说出一级口令\r\n"..*/      
+ 269   2                              }
+ 270   1      }        
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    475    ----
+   CONSTANT SIZE    =     72    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      1      10
+   IDATA SIZE       =      1       1
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

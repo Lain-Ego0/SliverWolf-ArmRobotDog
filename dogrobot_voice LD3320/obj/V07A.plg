@@ -1,0 +1,24 @@
+<html>
+<body>
+<pre>
+<h1>礦ision Build Log</h1>
+<h2>Project:</h2>
+D:\Ongoing project\1111The project that started today\4.0（PCB电气修正）\Software\dogrobot_voice LD3320\keil4 APP\YS-V0.7.uvproj
+Project File Date:  03/24/2024
+
+<h2>Output:</h2>
+Build target 'YS-V0.7口令模式工程 08xe'
+compiling main.c...
+compiling LDChip.c...
+compiling Reg_RW.c...
+compiling usart.c...
+creating library ..\obj\V07A.LIB...
+TRANSFER
+"..\obj\main.obj",
+"..\obj\LDChip.obj",
+"..\obj\Reg_RW.obj",
+"..\obj\usart.obj" 
+TO "..\obj\V07A.LIB"
+LIB51 LIBRARY MANAGER V4.24
+COPYRIGHT KEIL ELEKTRONIK GmbH 1987 - 2002
+"..\obj\V07A.LIB" - 0 Error(s), 0 Warning(s).

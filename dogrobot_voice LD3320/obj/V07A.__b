@@ -1,0 +1,6 @@
+TRANSFER
+"..\obj\main.obj",
+"..\obj\LDChip.obj",
+"..\obj\Reg_RW.obj",
+"..\obj\usart.obj" 
+TO "..\obj\V07A.LIB"
