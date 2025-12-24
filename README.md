@@ -1,2 +1,3 @@
 # SliverWolf-ArmRobotDog
-十二自由度四足
+桌面级十二自由度四足
+
